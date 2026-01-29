@@ -1,0 +1,316 @@
+CREATE OR REPLACE PROCEDURE bronze.load_bronze_patient_treatment_actions()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_batch_start_time TIMESTAMP;
+    v_batch_end_time   TIMESTAMP;
+    v_step_start_time  TIMESTAMP;
+    v_step_end_time    TIMESTAMP;
+    v_row_count        BIGINT;
+BEGIN
+    ---------------------------------------------------------------------------
+    -- Batch start
+    ---------------------------------------------------------------------------
+    v_batch_start_time := clock_timestamp();
+    RAISE NOTICE '================================================';
+    RAISE NOTICE 'Starting Bronze Load : Patient Treatment Actions';
+    RAISE NOTICE 'Start Time : %', v_batch_start_time;
+    RAISE NOTICE '================================================';
+
+    ---------------------------------------------------------------------------
+    -- Step 1: Create schema & staging table
+    ---------------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+    RAISE NOTICE '>> Creating staging schema and table';
+
+    CREATE SCHEMA IF NOT EXISTS staging;
+
+    DROP TABLE IF EXISTS staging.stg_patient_treatment_actions CASCADE;
+
+    CREATE TABLE staging.stg_patient_treatment_actions (
+        patient_id BIGINT,
+        patient_id_with_prefix TEXT,
+        order_process_otps TEXT,
+        order_process_otps_released_date TEXT,
+        patient_name TEXT,
+        patient_email_id TEXT,
+        patient_dob TEXT,
+        treatment_id BIGINT,
+        treatment_status TEXT,
+        treatment_enrollment_start_date TEXT,
+        treatment_action_id BIGINT,
+        treatment_action_status TEXT,
+        treatment_action_type TEXT,
+        treatment_end_date TEXT,
+        treatment_end_reason TEXT,
+        treatment_end_sub_reason TEXT,
+        guardian_name TEXT,
+        guardian_relationship TEXT,
+        guardian_identification_type TEXT,
+        guardian_identification_value TEXT,
+        vendor_partner_name TEXT,
+        vendor_partner_email_id TEXT,
+        followup_date TEXT,
+        doctor_name TEXT,
+        external_doctor_id TEXT,
+        treatment_hospital_name TEXT,
+        treatment_hospital_city_name TEXT,
+        treatment_action_hospital_name TEXT,
+        treatment_action_hospital_city_name TEXT,
+        medicine TEXT,
+        dosage TEXT,
+        user_name TEXT,
+        treatment_tags TEXT,
+        notes TEXT,
+        hospitalregid TEXT,
+        sub_type TEXT,
+        action_medicine_details_medicine_name TEXT,
+        action_medicine_details_quantity TEXT,
+        action_medicine_details_dosage TEXT,
+        action_pharma_info_doctor_name TEXT,
+        action_pharma_info_expected_delivery_date TEXT,
+        action_pharma_info_mode_of_delivery TEXT,
+        address TEXT,
+        cityname TEXT,
+        pincode TEXT,
+        effective_cycle_count TEXT,
+        effective_purchase_count TEXT,
+        effective_sub_type TEXT,
+        expected_delivery_dosage TEXT,
+        treatment_dosage TEXT,
+        treatment_dosage_type TEXT,
+        patient_created_by TEXT,
+        patient_updated_by TEXT,
+        patient_created_by_name TEXT,
+        patient_updated_by_name TEXT,
+        treatment_action_processed_at TEXT,
+        previous_action_processed_at_date TEXT,
+        days_difference_prev_processed_at_to_current_processed_at TEXT,
+        infusion_confirmation_exists TEXT,
+        infusion_confirmation_status TEXT,
+        infusion_confirmation_created_at TEXT,
+        next_cycle_icf_exists TEXT,
+        next_cycle_icf_status TEXT,
+        next_cycle_icf_created_at TEXT,
+        next_cycle_icf_comments TEXT,
+        age INTEGER,
+        zones TEXT,
+        city_name TEXT,
+        state_name TEXT
+    );
+
+    v_step_end_time := clock_timestamp();
+    RAISE NOTICE '>> Staging table created in % seconds',
+        EXTRACT(EPOCH FROM (v_step_end_time - v_step_start_time));
+
+    ---------------------------------------------------------------------------
+    -- Step 2: Load CSV into staging
+    ---------------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+    RAISE NOTICE '>> Loading CSV into staging table';
+
+    COPY staging.stg_patient_treatment_actions
+    FROM 'E:/Keytruda_db/DATA_SOURCES/patient_snapshot_2025_12_31.csv'
+    WITH (
+        FORMAT csv,
+        HEADER true,
+        DELIMITER ','
+    );
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+
+    v_step_end_time := clock_timestamp();
+    RAISE NOTICE '>> Rows loaded into staging: %', v_row_count;
+    RAISE NOTICE '>> Completed in % seconds',
+        EXTRACT(EPOCH FROM (v_step_end_time - v_step_start_time));
+
+    ---------------------------------------------------------------------------
+    -- Step 3: Insert into bronze table
+    ---------------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+    RAISE NOTICE '>> Inserting data into bronze.bronze_patient_treatment_actions';
+
+    INSERT INTO bronze.bronze_patient_treatment_actions (
+        patient_id,
+        patient_id_with_prefix,
+        treatment_id,
+        treatment_action_id,
+        order_process_otps,
+        order_process_otps_released_date,
+        patient_name,
+        patient_email_id,
+        patient_dob,
+        age,
+        treatment_status,
+        treatment_enrollment_start_date,
+        treatment_action_status,
+        treatment_action_type,
+        treatment_end_date,
+        treatment_end_reason,
+        treatment_end_sub_reason,
+        guardian_name,
+        guardian_relationship,
+        guardian_identification_type,
+        guardian_identification_value,
+        vendor_partner_name,
+        vendor_partner_email_id,
+        followup_date,
+        doctor_name,
+        external_doctor_id,
+        treatment_hospital_name,
+        treatment_hospital_city_name,
+        treatment_action_hospital_name,
+        treatment_action_hospital_city_name,
+        hospitalregid,
+        medicine,
+        dosage,
+        treatment_dosage,
+        treatment_dosage_type,
+        sub_type,
+        treatment_tags,
+        action_medicine_details_medicine_name,
+        action_medicine_details_quantity,
+        action_medicine_details_dosage,
+        action_pharma_info_doctor_name,
+        action_pharma_info_expected_delivery_date,
+        action_pharma_info_mode_of_delivery,
+        address,
+        cityname,
+        city_name,
+        state_name,
+        pincode,
+        zones,
+        effective_cycle_count,
+        effective_purchase_count,
+        effective_sub_type,
+        expected_delivery_dosage,
+        user_name,
+        patient_created_by,
+        patient_updated_by,
+        patient_created_by_name,
+        patient_updated_by_name,
+        treatment_action_processed_at,
+        previous_action_processed_at_date,
+        days_difference_prev_processed_at_to_current_processed_at,
+        infusion_confirmation_exists,
+        infusion_confirmation_status,
+        infusion_confirmation_created_at,
+        next_cycle_icf_exists,
+        next_cycle_icf_status,
+        next_cycle_icf_created_at,
+        next_cycle_icf_comments,
+        notes,
+        _source_extract_date,
+        _source_system,
+        _file_name
+    )
+    SELECT
+        patient_id,
+        patient_id_with_prefix,
+        treatment_id,
+        treatment_action_id,
+        order_process_otps,
+        NULLIF(order_process_otps_released_date, '')::TIMESTAMP,
+        patient_name,
+        patient_email_id,
+        NULLIF(patient_dob, '')::DATE,
+        age,
+        treatment_status,
+        NULLIF(treatment_enrollment_start_date, '')::DATE,
+        treatment_action_status,
+        treatment_action_type,
+        NULLIF(treatment_end_date, '')::DATE,
+        treatment_end_reason,
+        treatment_end_sub_reason,
+        guardian_name,
+        guardian_relationship,
+        guardian_identification_type,
+        NULLIF(guardian_identification_value, ''),
+        vendor_partner_name,
+        vendor_partner_email_id,
+        NULLIF(followup_date, '')::TIMESTAMP,
+        doctor_name,
+        NULLIF(external_doctor_id, '')::BIGINT,
+        treatment_hospital_name,
+        treatment_hospital_city_name,
+        treatment_action_hospital_name,
+        treatment_action_hospital_city_name,
+        NULLIF(hospitalregid, ''),
+        medicine,
+        NULLIF(dosage, '')::INTEGER,
+        NULLIF(treatment_dosage, '')::INTEGER,
+        NULLIF(treatment_dosage_type, '')::INTEGER,
+        sub_type,
+        treatment_tags,
+        action_medicine_details_medicine_name,
+        NULLIF(action_medicine_details_quantity, '')::INTEGER,
+        NULLIF(action_medicine_details_dosage, '')::INTEGER,
+        action_pharma_info_doctor_name,
+        NULLIF(action_pharma_info_expected_delivery_date, '')::DATE,
+        action_pharma_info_mode_of_delivery,
+        address,
+        cityname,
+        city_name,
+        state_name,
+        NULLIF(pincode, '')::INTEGER,
+        zones,
+        NULLIF(effective_cycle_count, '')::INTEGER,
+        NULLIF(effective_purchase_count, '')::INTEGER,
+        effective_sub_type,
+        NULLIF(expected_delivery_dosage, '')::INTEGER,
+        user_name,
+        NULLIF(patient_created_by, '')::BIGINT,
+        NULLIF(patient_updated_by, '')::BIGINT,
+        patient_created_by_name,
+        patient_updated_by_name,
+        NULLIF(treatment_action_processed_at, '')::TIMESTAMP,
+        NULLIF(previous_action_processed_at_date, '')::TIMESTAMP,
+        NULLIF(days_difference_prev_processed_at_to_current_processed_at, '')::INTEGER,
+        infusion_confirmation_exists,
+        infusion_confirmation_status,
+        NULLIF(infusion_confirmation_created_at, '')::TIMESTAMP,
+        next_cycle_icf_exists,
+        next_cycle_icf_status,
+        NULLIF(next_cycle_icf_created_at, '')::TIMESTAMP,
+        next_cycle_icf_comments,
+        notes,
+        DATE '2025-12-31',
+        'OPS_PORTAL_PHARMA',
+        'patient_snapshot_2025_12_31.csv'
+    FROM staging.stg_patient_treatment_actions;
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+
+    v_step_end_time := clock_timestamp();
+    RAISE NOTICE '>> Rows inserted into bronze: %', v_row_count;
+    RAISE NOTICE '>> Completed in % seconds',
+        EXTRACT(EPOCH FROM (v_step_end_time - v_step_start_time));
+
+    ---------------------------------------------------------------------------
+    -- Batch end
+    ---------------------------------------------------------------------------
+    v_batch_end_time := clock_timestamp();
+    RAISE NOTICE '================================================';
+    RAISE NOTICE 'Bronze Load Completed Successfully';
+    RAISE NOTICE 'Total Duration : % seconds',
+        EXTRACT(EPOCH FROM (v_batch_end_time - v_batch_start_time));
+    RAISE NOTICE '================================================';
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE '================================================';
+        RAISE NOTICE 'ERROR DURING BRONZE LOAD';
+        RAISE NOTICE 'SQLSTATE : %', SQLSTATE;
+        RAISE NOTICE 'MESSAGE  : %', SQLERRM;
+        RAISE NOTICE '================================================';
+        RAISE;
+END;
+$$;
+
+CALL bronze.load_bronze_patient_treatment_actions();
+
+SELECT COUNT(*) 
+FROM bronze.bronze_patient_treatment_actions;
+
+SELECT * FROM bronze.bronze_patient_treatment_actions LIMIT 10;
+
