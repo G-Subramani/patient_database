@@ -1,0 +1,115 @@
+/*
+===============================================================================
+DDL Script : Create Bronze Tables for Treatment Events Data
+Schema     : bronze
+Database   : keytruda
+Layer      : Bronze (Medallion Architecture)
+===============================================================================
+
+Script Purpose:
+    - Creates Bronze layer table for patient treatment events data
+    - Stores raw, immutable treatment action records
+
+Design Principles:
+    - Bronze layer is RAW and IMMUTABLE
+    - Incremental loads only (append history)
+    - No updates or deletes on business data
+    - Staging sources may be reloadable
+    - Supports Medallion Architecture (Bronze → Silver → Gold)
+
+Re-runnable:
+    YES
+    - Schema created using IF NOT EXISTS
+    - Table dropped and recreated to ensure clean DDL deployment
+
+Ownership:
+    Subramani G
+
+===============================================================================
+*/
+
+CREATE SCHEMA IF NOT EXISTS bronze;
+
+DROP TABLE IF EXISTS bronze.bronze_patient_treatment_actions CASCADE;
+
+CREATE TABLE IF NOT EXISTS bronze.bronze_patient_treatment_actions (
+
+	patient_id BIGINT,
+    patient_id_with_prefix TEXT,
+    order_process_otps TEXT,
+    order_process_otps_released_date TIMESTAMP,
+    patient_name TEXT,
+    patient_email_id TEXT,
+    patient_dob DATE,
+    treatment_id BIGINT,
+    treatment_status TEXT,
+    treatment_enrollment_start_date DATE,
+    treatment_action_id BIGINT,
+    treatment_action_status TEXT,
+    treatment_action_type TEXT,
+    treatment_end_date DATE,
+    treatment_end_reason TEXT,
+    treatment_end_sub_reason TEXT,
+    guardian_name TEXT,
+    guardian_relationship TEXT,
+    guardian_identification_type TEXT,
+    guardian_identification_value TEXT,
+    vendor_partner_name TEXT,
+    vendor_partner_email_id TEXT,
+    followup_date TIMESTAMP,
+    doctor_name TEXT,
+    external_doctor_id BIGINT,
+    treatment_hospital_name TEXT,
+    treatment_hospital_city_name TEXT,
+    treatment_action_hospital_name TEXT,
+    treatment_action_hospital_city_name TEXT,
+    medicine TEXT,
+    dosage INTEGER,
+    user_name TEXT,
+    treatment_tags TEXT,
+    notes TEXT,
+    hospitalregid TEXT,
+    sub_type TEXT,
+    action_medicine_details_medicine_name TEXT,
+    action_medicine_details_quantity INTEGER,
+    action_medicine_details_dosage INTEGER,
+    action_pharma_info_doctor_name TEXT,
+    action_pharma_info_expected_delivery_date DATE,
+    action_pharma_info_mode_of_delivery TEXT,
+    address TEXT,
+    cityname TEXT,
+    pincode INTEGER,
+    effective_cycle_count INTEGER,
+    effective_purchase_count INTEGER,
+    effective_sub_type TEXT,
+    expected_delivery_dosage INTEGER,
+    treatment_dosage INTEGER,
+    treatment_dosage_type INTEGER,
+    patient_created_by TEXT,
+    patient_updated_by TEXT,
+    patient_created_by_name TEXT,
+    patient_updated_by_name TEXT,
+    treatment_action_processed_at TIMESTAMP,
+    previous_action_processed_at_date TIMESTAMP,
+    days_difference_prev_processed_at_to_current_processed_at INTEGER,
+    infusion_confirmation_exists TEXT,
+    infusion_confirmation_status TEXT,
+    infusion_confirmation_created_at TIMESTAMP,
+    next_cycle_icf_exists TEXT,
+    next_cycle_icf_status TEXT,
+    next_cycle_icf_created_at TIMESTAMP,
+    next_cycle_icf_comments TEXT,
+    age INTEGER,
+    zones TEXT,
+    city_name TEXT,
+    state_name TEXT,
+    --metadata columns (Bronze standard)
+	_source_extract_date date NOT NULL,
+    _ingestion_timestamp timestamp without time zone NOT NULL DEFAULT now(),
+    _source_system text NOT NULL,
+    _file_name text 
+
+);
+
+--sample validation
+SELECT * FROM bronze.bronze_patient_treatment_actions LIMIT 10;
