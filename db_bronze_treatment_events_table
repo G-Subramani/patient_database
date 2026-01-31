@@ -33,7 +33,7 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 DROP TABLE IF EXISTS bronze.bronze_patient_treatment_actions CASCADE;
 
 CREATE TABLE IF NOT EXISTS bronze.bronze_patient_treatment_actions (
-
+	index_no BIGINT,
 	patient_id BIGINT,
     patient_id_with_prefix TEXT,
     order_process_otps TEXT,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS bronze.bronze_patient_treatment_actions (
     vendor_partner_email_id TEXT,
     followup_date TIMESTAMP,
     doctor_name TEXT,
-    external_doctor_id BIGINT,
+    external_doctor_id TEXT,
     treatment_hospital_name TEXT,
     treatment_hospital_city_name TEXT,
     treatment_action_hospital_name TEXT,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS bronze.bronze_patient_treatment_actions (
     patient_updated_by_name TEXT,
     treatment_action_processed_at TIMESTAMP,
     previous_action_processed_at_date TIMESTAMP,
-    days_difference_prev_processed_at_to_current_processed_at INTEGER,
+    days_difference_prev_processed_at_to_current_processed_at NUMERIC,
     infusion_confirmation_exists TEXT,
     infusion_confirmation_status TEXT,
     infusion_confirmation_created_at TIMESTAMP,
