@@ -25,9 +25,8 @@ BEGIN
 
     CREATE SCHEMA IF NOT EXISTS staging;
 
-    DROP TABLE IF EXISTS staging.stg_patient_treatment_actions CASCADE;
-
-    CREATE TABLE staging.stg_patient_treatment_actions (
+    CREATE TABLE IF NOT EXISTS staging.stg_patient_treatment_actions (
+		index_no BIGINT,
         patient_id BIGINT,
         patient_id_with_prefix TEXT,
         order_process_otps TEXT,
@@ -110,7 +109,7 @@ BEGIN
     RAISE NOTICE '>> Loading CSV into staging table';
 
     COPY staging.stg_patient_treatment_actions
-    FROM 'E:/Keytruda_db/DATA_SOURCES/patient_snapshot_2025_12_31.csv'
+    FROM 'E:/Keytruda_db/DATA_SOURCES/db_treatment_data.csv'
     WITH (
         FORMAT csv,
         HEADER true,
@@ -131,6 +130,7 @@ BEGIN
     RAISE NOTICE '>> Inserting data into bronze.bronze_patient_treatment_actions';
 
     INSERT INTO bronze.bronze_patient_treatment_actions (
+		index_no, 
         patient_id,
         patient_id_with_prefix,
         treatment_id,
@@ -205,6 +205,7 @@ BEGIN
         _file_name
     )
     SELECT
+		index_no, 
         patient_id,
         patient_id_with_prefix,
         treatment_id,
@@ -230,7 +231,7 @@ BEGIN
         vendor_partner_email_id,
         NULLIF(followup_date, '')::TIMESTAMP,
         doctor_name,
-        NULLIF(external_doctor_id, '')::BIGINT,
+        NULLIF(external_doctor_id, ''),
         treatment_hospital_name,
         treatment_hospital_city_name,
         treatment_action_hospital_name,
@@ -265,7 +266,7 @@ BEGIN
         patient_updated_by_name,
         NULLIF(treatment_action_processed_at, '')::TIMESTAMP,
         NULLIF(previous_action_processed_at_date, '')::TIMESTAMP,
-        NULLIF(days_difference_prev_processed_at_to_current_processed_at, '')::INTEGER,
+        NULLIF(days_difference_prev_processed_at_to_current_processed_at, '')::NUMERIC,
         infusion_confirmation_exists,
         infusion_confirmation_status,
         NULLIF(infusion_confirmation_created_at, '')::TIMESTAMP,
@@ -309,8 +310,12 @@ $$;
 
 CALL bronze.load_bronze_patient_treatment_actions();
 
+--VALIDATION
 SELECT COUNT(*) 
 FROM bronze.bronze_patient_treatment_actions;
 
 SELECT * FROM bronze.bronze_patient_treatment_actions LIMIT 10;
+
+SELECT * FROM bronze.bronze_patient_treatment_actions 
+WHERE pincode IS NULL;
 
