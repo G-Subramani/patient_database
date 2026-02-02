@@ -1,0 +1,431 @@
+CREATE SCHEMA IF NOT EXISTS audit;
+CREATE TABLE IF NOT EXISTS audit.etl_job_log (
+    job_name            TEXT,
+    step_name           TEXT,
+    batch_start_time    TIMESTAMP,
+    batch_end_time      TIMESTAMP,
+    step_start_time     TIMESTAMP,
+    step_end_time       TIMESTAMP,
+    row_count           BIGINT,
+    status              TEXT,
+    error_message       TEXT,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE PROCEDURE bronze.load_appointment_events_bronze()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_batch_start_time TIMESTAMP;
+    v_batch_end_time   TIMESTAMP;
+    v_step_start_time  TIMESTAMP;
+    v_step_end_time    TIMESTAMP;
+    v_row_count        BIGINT;
+BEGIN
+    ------------------------------------------------------------------
+    -- Batch start
+    ------------------------------------------------------------------
+    v_batch_start_time := clock_timestamp();
+
+    ------------------------------------------------------------------
+    -- STEP 1: Create staging table (idempotent)
+    ------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+
+    CREATE SCHEMA IF NOT EXISTS staging;
+
+    CREATE TABLE IF NOT EXISTS staging.stg_appointment_events (
+        appointment_date TEXT,
+        area TEXT,
+        roll_up_city TEXT,
+
+        referrer_name TEXT,
+        referrer_source TEXT,
+        referrer_bucket TEXT,
+        referrer_type TEXT,
+
+        clinic_name TEXT,
+        paramedic TEXT,
+        master_referrer_doctor TEXT,
+
+        appt_referred_by_name TEXT,
+        appt_sales_executive_name TEXT,
+
+        service TEXT,
+
+        clinician_name TEXT,
+        emp_type TEXT,
+        clinician_vendor_master_id TEXT,
+        clinician_vendor_master_name TEXT,
+        clinician_id TEXT,
+        emp_id TEXT,
+        clinician_user_id TEXT,
+        reporting_manager TEXT,
+
+        appointment_created_by_id TEXT,
+        appointment_created_by_name TEXT,
+        appointment_created_on TEXT,
+
+        patient_name TEXT,
+
+        appointment_cost TEXT,
+        other_charges TEXT,
+        other_charges_desc TEXT,
+        appointment_service_charges TEXT,
+        appointment_discount TEXT,
+        discount_type TEXT,
+        total_fee TEXT,
+
+        status TEXT,
+        package_name_empty TEXT,
+
+        patient_id TEXT,
+        patient_user_id TEXT,
+
+        service_balance TEXT,
+        package_balance TEXT,
+        package_id TEXT,
+
+        offered_price TEXT,
+        mrp TEXT,
+        package_discount TEXT,
+
+        hospital_regid TEXT,
+        appointment_id TEXT,
+
+        first_successful_appt_date TEXT,
+        first_successful_appt_id TEXT,
+        next_appt_id TEXT,
+
+        patient_type TEXT,
+
+        sales_executive TEXT,
+        sales_executive_id TEXT,
+
+        amount_paid TEXT,
+        package_name TEXT,
+
+        service_type_id TEXT,
+        app_start_time TEXT,
+        app_end_time TEXT,
+
+        service_category TEXT,
+        collection_charges TEXT,
+        revenue TEXT,
+
+        appt_referrer_name TEXT,
+        appt_referred_by TEXT,
+        appt_reference_from TEXT,
+        appt_department TEXT,
+
+        bill_to_id TEXT,
+        appt_sales_executive TEXT,
+
+        appt_referrer_source TEXT,
+        appt_referrer_bucket TEXT,
+        appt_referred_type TEXT,
+        appt_referrer_brand_name TEXT,
+
+        patient_brand_name TEXT,
+        patient_package_id TEXT,
+        subscription_ticket_id TEXT,
+
+        appt_patient_address_state TEXT,
+        patient_reference_form TEXT,
+
+        revenue_hospital_id TEXT,
+        revenue_hospital_name TEXT,
+
+        patient_with_us_since TEXT,
+
+        revenue_bdo_id TEXT,
+        revenue_bdo_name TEXT,
+
+        revenue_doctor_id TEXT,
+        revenue_doctor_name TEXT,
+
+        revenue_clinician_id TEXT,
+        revenue_clinician_name TEXT,
+
+        revenue_category TEXT,
+
+        subscription_start_date TEXT,
+        first_clinical_app_date TEXT
+    );
+
+    v_step_end_time := clock_timestamp();
+
+    INSERT INTO audit.etl_job_log
+    VALUES (
+        'load_appointment_events_bronze',
+        'CREATE_STAGING',
+        v_batch_start_time,
+        NULL,
+        v_step_start_time,
+        v_step_end_time,
+        NULL,
+        'SUCCESS',
+        NULL
+    );
+
+    ------------------------------------------------------------------
+    -- STEP 2: Truncate staging (safe reload)
+    ------------------------------------------------------------------
+    TRUNCATE TABLE staging.stg_appointment_events;
+
+    ------------------------------------------------------------------
+    -- STEP 3: Load CSV into staging
+    ------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+
+    COPY staging.stg_appointment_events
+    FROM 'E:\Keytruda_db\DATA_SOURCES\appointment_data_2025_12_31.CSV'
+    DELIMITER ','
+    CSV HEADER;
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    v_step_end_time := clock_timestamp();
+
+    INSERT INTO audit.etl_job_log
+    VALUES (
+        'load_appointment_events_bronze',
+        'COPY_TO_STAGING',
+        v_batch_start_time,
+        NULL,
+        v_step_start_time,
+        v_step_end_time,
+        v_row_count,
+        'SUCCESS',
+        NULL
+    );
+
+    ------------------------------------------------------------------
+    -- STEP 4: Insert into bronze with type casting
+    ------------------------------------------------------------------
+    v_step_start_time := clock_timestamp();
+
+    INSERT INTO bronze.bronze_appointment_events (
+        appointment_date,
+        area,
+        roll_up_city,
+        referrer_name,
+        referrer_source,
+        referrer_bucket,
+        referrer_type,
+        clinic_name,
+        paramedic,
+        master_referrer_doctor,
+        appt_referred_by_name,
+        appt_sales_executive_name,
+        service,
+        clinician_name,
+        emp_type,
+        clinician_vendor_master_id,
+        clinician_vendor_master_name,
+        clinician_id,
+        emp_id,
+        clinician_user_id,
+        reporting_manager,
+        appointment_created_by_id,
+        appointment_created_by_name,
+        appointment_created_on,
+        patient_name,
+        appointment_cost,
+        other_charges,
+        other_charges_desc,
+        appointment_service_charges,
+        appointment_discount,
+        discount_type,
+        total_fee,
+        status,
+        package_name_empty,
+        patient_id,
+        patient_user_id,
+        service_balance,
+        package_balance,
+        package_id,
+        offered_price,
+        mrp,
+        package_discount,
+        hospital_regid,
+        appointment_id,
+        first_successful_appt_date,
+        first_successful_appt_id,
+        next_appt_id,
+        patient_type,
+        sales_executive,
+        sales_executive_id,
+        amount_paid,
+        package_name,
+        service_type_id,
+        app_start_time,
+        app_end_time,
+        service_category,
+        collection_charges,
+        revenue,
+        appt_referrer_name,
+        appt_referred_by,
+        appt_reference_from,
+        appt_department,
+        bill_to_id,
+        appt_sales_executive,
+        appt_referrer_source,
+        appt_referrer_bucket,
+        appt_referred_type,
+        appt_referrer_brand_name,
+        patient_brand_name,
+        patient_package_id,
+        subscription_ticket_id,
+        appt_patient_address_state,
+        patient_reference_form,
+        revenue_hospital_id,
+        revenue_hospital_name,
+        patient_with_us_since,
+        revenue_bdo_id,
+        revenue_bdo_name,
+        revenue_doctor_id,
+        revenue_doctor_name,
+        revenue_clinician_id,
+        revenue_clinician_name,
+        revenue_category,
+        subscription_start_date,
+        first_clinical_app_date,
+        _source_extract_date,
+        _source_system,
+        _file_name
+    )
+    SELECT
+        NULLIF(appointment_date,'')::DATE,
+        area,
+        roll_up_city,
+        referrer_name,
+        referrer_source,
+        referrer_bucket,
+        referrer_type,
+        clinic_name,
+        paramedic,
+        master_referrer_doctor,
+        appt_referred_by_name,
+        appt_sales_executive_name,
+        service,
+        clinician_name,
+        emp_type,
+        clinician_vendor_master_id,
+        clinician_vendor_master_name,
+        NULLIF(clinician_id,'')::BIGINT,
+        emp_id,
+        NULLIF(clinician_user_id,'')::BIGINT,
+        reporting_manager,
+        NULLIF(appointment_created_by_id,'')::BIGINT,
+        appointment_created_by_name,
+        NULLIF(appointment_created_on,'')::TIMESTAMP,
+        patient_name,
+        NULLIF(appointment_cost,'')::NUMERIC,
+        NULLIF(other_charges,'')::NUMERIC,
+        other_charges_desc,
+        NULLIF(appointment_service_charges,'')::NUMERIC,
+        NULLIF(appointment_discount,'')::NUMERIC,
+        discount_type,
+        NULLIF(total_fee,'')::NUMERIC,
+        status,
+        package_name_empty,
+        NULLIF(patient_id,'')::BIGINT,
+        NULLIF(patient_user_id,'')::BIGINT,
+        service_balance,
+        package_balance,
+        NULLIF(package_id,'')::BIGINT,
+        NULLIF(offered_price,'')::NUMERIC,
+        NULLIF(mrp,'')::NUMERIC,
+        NULLIF(package_discount,'')::NUMERIC,
+        hospital_regid,
+        NULLIF(appointment_id,'')::BIGINT,
+        NULLIF(first_successful_appt_date,'')::DATE,
+        NULLIF(first_successful_appt_id,'')::BIGINT,
+        NULLIF(next_appt_id,'')::BIGINT,
+        patient_type,
+        sales_executive,
+        sales_executive_id,
+        NULLIF(amount_paid,'')::NUMERIC,
+        package_name,
+        NULLIF(service_type_id,'')::INTEGER,
+        NULLIF(app_start_time,'')::TIMESTAMP,
+        NULLIF(app_end_time,'')::TIMESTAMP,
+        service_category,
+        NULLIF(collection_charges,'')::NUMERIC,
+        NULLIF(revenue,'')::NUMERIC,
+        appt_referrer_name,
+        appt_referred_by,
+        appt_reference_from,
+        appt_department,
+        NULLIF(bill_to_id,'')::BIGINT,
+        appt_sales_executive,
+        appt_referrer_source,
+        appt_referrer_bucket,
+        appt_referred_type,
+        appt_referrer_brand_name,
+        patient_brand_name,
+        NULLIF(patient_package_id,'')::BIGINT,
+        subscription_ticket_id,
+        appt_patient_address_state,
+        patient_reference_form,
+        revenue_hospital_id,
+        revenue_hospital_name,
+        patient_with_us_since,
+        revenue_bdo_id,
+        revenue_bdo_name,
+        revenue_doctor_id,
+        revenue_doctor_name,
+        revenue_clinician_id,
+        revenue_clinician_name,
+        revenue_category,
+        NULLIF(subscription_start_date,'')::DATE,
+        NULLIF(first_clinical_app_date,'')::TIMESTAMP,
+        DATE '2025-12-31',
+        'APPOINTMENT DATA',
+        'Appointment_data_snapshot_2025_12_31.csv'
+    FROM staging.stg_appointment_events;
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    v_step_end_time := clock_timestamp();
+
+    ------------------------------------------------------------------
+    -- Batch end
+    ------------------------------------------------------------------
+    v_batch_end_time := clock_timestamp();
+
+    INSERT INTO audit.etl_job_log
+    VALUES (
+        'load_appointment_events_bronze',
+        'INSERT_BRONZE',
+        v_batch_start_time,
+        v_batch_end_time,
+        v_step_start_time,
+        v_step_end_time,
+        v_row_count,
+        'SUCCESS',
+        NULL
+    );
+
+EXCEPTION
+    WHEN OTHERS THEN
+        INSERT INTO audit.etl_job_log
+        VALUES (
+            'load_appointment_events_bronze',
+            'FAILED',
+            v_batch_start_time,
+            clock_timestamp(),
+            NULL,
+            NULL,
+            NULL,
+            'FAILED',
+            SQLERRM
+        );
+        RAISE;
+END;
+$$;
+
+CALL bronze.load_appointment_events_bronze();
+
+SELECT COUNT(*) FROM bronze.bronze_appointment_events;
+
+SELECT * FROM audit.etl_job_log;
