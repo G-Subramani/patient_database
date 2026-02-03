@@ -1,0 +1,125 @@
+CREATE SCHEMA IF NOT EXISTS silver; 
+
+--silver.dim_patient data 
+CREATE TABLE IF NOT EXISTS silver.dim_patient ( 
+	patient_sk BIGSERIAL PRIMARY KEY, 
+	patient_id BIGINT NOT NULL, 
+	patient_id_with_prefix TEXT, 
+	patient_name TEXT, 
+	patient_email_id TEXT, 
+	patient_govt_id TEXT, --hospital_regid 
+	patient_date_of_birth DATE, 
+	age INTEGER, 
+	patient_created_by TEXT, 
+	patient_created_by_name TEXT, 
+	patient_updated_by TEXT, 
+	patient_updated_by_name TEXT, 
+	current_program TEXT,--sub_type 
+	record_first_seen_at TIMESTAMP, --min(treatment_enrollment_start_date) 
+	record_last_seen_at TIMESTAMP, --max(treatment_action_processed_at) 
+	_source_system TEXT, 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ); 
+	
+--silver.dim_caregiver 
+CREATE TABLE IF NOT EXISTS silver.dim_caregiver ( 
+	caregiver_sk BIGSERIAL PRIMARY KEY, 
+	caregiver_name TEXT, 
+	caregiver_relationship TEXT, 
+	identification_type TEXT, 
+	identification_value TEXT, 
+	source_system TEXT, 
+	record_first_seen_at TIMESTAMP, --min(treatment_enrollment_start_date) 
+	record_last_seen_at TIMESTAMP, --max(treatment_action_processed_at) 
+	); 
+
+--silver.dim_doctor
+CREATE TABLE IF NOT EXISTS silver.dim_doctor( 
+	doctor_sk BIGSERIAL PRIMARY KEY, 
+	doctor_name TEXT, 
+	external_doctor_id TEXT, 
+	source_system TEXT ); 
+
+--silver.dim_hospital
+CREATE TABLE IF NOT EXISTS silver.dim_hospital ( 
+	hospital_sk BIGSERIAL PRIMARY KEY, 
+	hospital_name TEXT, --treatment_action_hospital_name 
+	hospital_city TEXT, --treatment_action_hospital_city_name 
+	city_name TEXT, 
+	state_name TEXT, 
+	zones TEXT, 
+	pincode INTEGER, 
+	address TEXT, 
+	source_system TEXT ); 
+
+--silver.dim_vendor
+CREATE TABLE IF NOT EXISTS silver.dim_vendor ( 
+	vendor_sk BIGSERIAL PRIMARY KEY, 
+	vendor_name TEXT, 
+	vendor_email_id TEXT, 
+	source_system TEXT ); 
+
+--silver.fact_treatment
+
+CREATE TABLE IF NOT EXISTS silver.fact_treatment_action ( 
+	treatment_action_sk BIGSERIAL PRIMARY KEY, 
+	treatment_action_id BIGINT NOT NULL, 
+	order_process_otps TEXT, 
+	order_process_otps_released_date TIMESTAMP, 
+	treatment_id BIGINT NOT NULL, 
+	patient_sk BIGINT NOT NULL, 
+	caregiver_sk BIGINT, 
+	doctor_sk BIGINT, 
+	hospital_sk BIGINT, 
+	vendor_sk BIGINT, 
+	treatment_status TEXT, 
+	treatment_action_status TEXT, 
+	treatment_action_type TEXT, --(New and repeat) 
+	treatment_enrollment_start_date DATE, 
+	treatment_end_date DATE, 
+	treatment_end_reason TEXT, 
+	effective_sub_type TEXT, 
+	effective_cycle_count INTEGER, 
+	effective_purchase_count INTEGER, 
+	action_doctor_name TEXT, --action_pharma_info_doctor_name 
+	medicine_name TEXT, 
+	dosage INTEGER, 
+	treatment_dosage INTEGER, 
+	action_medicine_details_quantity INTEGER, 
+	expected_delivery_date DATE, 
+	expected_delivery_dosage INTEGER, 
+	infusion_confirmation_exists TEXT, 
+	infusion_confirmation_status TEXT, 
+	infusion_confirmation_created_at TIMESTAMP, 
+	next_cycle_icf_exists TEXT, 
+	next_cycle_icf_status TEXT, 
+	next_cycle_icf_created_at TIMESTAMP, 
+	next_cycle_icf_comments TEXT, 
+	followup_date TIMESTAMP, 
+	treatment_action_processed_at TIMESTAMP, 
+	previous_action_processed_at TIMESTAMP, 
+	days_diff_prev_to_current NUMERIC, 
+	patient_created_by BIGINT, 
+	patient_created_by_name TEXT, 
+	patient_updated_by BIGINT, 
+	patient_updated_by_name TEXT, 
+	user_name TEXT, 
+	notes TEXT, 
+	treatment_tags TEXT, 
+	index_no BIGINT, 
+	_source_system TEXT, 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+	CONSTRAINT fk_patient FOREIGN KEY (patient_sk) REFERENCES silver.dim_patient(patient_sk), 
+	CONSTRAINT fk_caregiver FOREIGN KEY (caregiver_sk) REFERENCES silver.dim_caregiver(caregiver_sk), 
+	CONSTRAINT fk_doctor FOREIGN KEY (doctor_sk) REFERENCES silver.dim_doctor(doctor_sk), 
+	CONSTRAINT fk_hospital FOREIGN KEY (hospital_sk) REFERENCES silver.dim_hospital(hospital_sk), 
+	CONSTRAINT fk_vendor FOREIGN KEY (vendor_sk) REFERENCES silver.dim_vendor(vendor_sk) 
+	); 
+
+CREATE TABLE silver.audit_treatment_action_lineage ( 
+	index_no BIGINT PRIMARY KEY, 
+	treatment_action_id BIGINT, 
+	patient_id BIGINT, 
+	source_extract_date DATE, 
+	source_file_name TEXT, 
+	source_system TEXT, 
+	loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );
