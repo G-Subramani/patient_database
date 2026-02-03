@@ -1,0 +1,154 @@
+--silver fact table load 
+INSERT INTO silver.fact_treatment_action (
+    treatment_action_id,
+    order_process_otps,
+    order_process_otps_released_date,
+    treatment_id,
+
+    patient_sk,
+    caregiver_sk,
+    doctor_sk,
+    hospital_sk,
+    vendor_sk,
+
+    treatment_status,
+    treatment_action_status,
+    treatment_action_type,
+
+    treatment_enrollment_start_date,
+    treatment_end_date,
+    treatment_end_reason,
+
+    effective_sub_type,
+    effective_cycle_count,
+    effective_purchase_count,
+
+    action_doctor_name,
+    medicine_name,
+    dosage,
+    treatment_dosage,
+    action_medicine_details_quantity,
+
+    expected_delivery_date,
+    expected_delivery_dosage,
+
+    infusion_confirmation_exists,
+    infusion_confirmation_status,
+    infusion_confirmation_created_at,
+
+    next_cycle_icf_exists,
+    next_cycle_icf_status,
+    next_cycle_icf_created_at,
+    next_cycle_icf_comments,
+
+    followup_date,
+    treatment_action_processed_at,
+    previous_action_processed_at,
+    days_diff_prev_to_current,
+
+    patient_created_by,
+    patient_created_by_name,
+    patient_updated_by,
+    patient_updated_by_name,
+
+    user_name,
+    notes,
+    treatment_tags,
+
+    index_no,
+    _source_system
+)
+SELECT
+    b.treatment_action_id,
+    TRIM(b.order_process_otps),
+    b.order_process_otps_released_date,
+    b.treatment_id,
+
+    p.patient_sk,
+    c.caregiver_sk,
+    d.doctor_sk,
+    h.hospital_sk,
+    v.vendor_sk,
+
+    TRIM(b.treatment_status),
+    TRIM(b.treatment_action_status),
+    TRIM(b.treatment_action_type),
+
+    b.treatment_enrollment_start_date,
+    b.treatment_end_date,
+    TRIM(b.treatment_end_reason),
+
+    TRIM(b.effective_sub_type),
+    b.effective_cycle_count,
+    b.effective_purchase_count,
+
+    -- 🔑 CLEANED action doctor name
+	    NULLIF(
+	    TRIM(
+	        REGEXP_REPLACE(
+	            REGEXP_REPLACE(
+	                REGEXP_REPLACE(
+	                    b.action_pharma_info_doctor_name,
+	                    '^[[:space:]]*[Dd][Rr][[:space:]]*\.?[[:space:]]*',
+	                    '',
+	                    'g'
+	                ),
+	                '[\.,\-]',
+	                ' ',
+	                'g'
+	            ),
+	            '\s+',
+	            ' ',
+	            'g'
+	        )
+	    ),
+	    ''
+	) AS action_doctor_name,
+    TRIM(b.medicine),
+    b.dosage,
+    b.treatment_dosage,
+    b.action_medicine_details_quantity,
+
+    b.action_pharma_info_expected_delivery_date,
+    b.expected_delivery_dosage,
+
+    b.infusion_confirmation_exists,
+    b.infusion_confirmation_status,
+    b.infusion_confirmation_created_at,
+
+    b.next_cycle_icf_exists,
+    b.next_cycle_icf_status,
+    b.next_cycle_icf_created_at,
+    b.next_cycle_icf_comments,
+
+    b.followup_date,
+    b.treatment_action_processed_at,
+    b.previous_action_processed_at_date,
+    b.days_difference_prev_processed_at_to_current_processed_at,
+
+    b.patient_created_by,
+    b.patient_created_by_name,
+    b.patient_updated_by,
+    b.patient_updated_by_name,
+
+    TRIM(b.user_name),
+    b.notes,
+    b.treatment_tags,
+
+    b.index_no,
+    b._source_system
+FROM bronze.bronze_patient_treatment_actions b
+JOIN silver.dim_patient  p ON p.patient_id = b.patient_id
+LEFT JOIN silver.dim_caregiver c
+       ON c.caregiver_name = TRIM(b.guardian_name)
+LEFT JOIN silver.dim_doctor d
+       ON d.doctor_name = TRIM(b.doctor_name)
+LEFT JOIN silver.dim_hospital h
+       ON h.hospital_name = TRIM(b.treatment_action_hospital_name)
+LEFT JOIN silver.dim_vendor v
+       ON v.vendor_name = TRIM(b.vendor_partner_name);
+
+
+SELECT COUNT(*) FROM silver.fact_treatment_action;
+
+SELECT * FROM silver.fact_treatment_action LIMIT 10;
