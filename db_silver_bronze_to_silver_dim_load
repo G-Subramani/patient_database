@@ -1,3 +1,5 @@
+--silver dimension table load 
+--patient table  
 INSERT INTO silver.dim_patient (
     patient_id,
     patient_id_with_prefix,
@@ -85,7 +87,10 @@ GROUP BY
 SELECT * FROM silver.dim_patient LIMIT 10;
 SELECT COUNT(*) FROM  silver.dim_patient;
 
---caregiver table
+SELECT * FROM  silver.dim_patient
+WHERE patient_id='671771';
+
+--silver.dim_caregiver table
 INSERT INTO silver.dim_caregiver (
     caregiver_name,
     caregiver_relationship,
@@ -129,7 +134,7 @@ GROUP BY
 SELECT COUNT(*) FROM silver.dim_caregiver;
 SELECT * FROM silver.dim_caregiver LIMIT 10;
 
---doctor table 
+--silver.dim_doctor table 
 INSERT INTO silver.dim_doctor (
     doctor_name,
     external_doctor_id,
@@ -161,3 +166,108 @@ WHERE b.doctor_name IS NOT NULL
 SELECT COUNT(*) FROM silver.dim_doctor;
 SELECT * FROM silver.dim_doctor LIMIT 10;
 
+--silver.dim_hospital
+
+INSERT INTO silver.dim_hospital (
+    hospital_name,
+    hospital_city,
+    city_name,
+    state_name,
+    zones,
+    pincode,
+    address,
+    source_system
+)
+SELECT DISTINCT
+    /* -------------------------------
+       Hospital name cleanup
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                    LOWER(NULLIF(b.treatment_action_hospital_name, '')),
+                    '[\.,\-]', ' ', 'g'            -- remove punctuation
+                ),
+                '\s+[a-z]$|\s+\d+$', '', 'g'      -- remove trailing single letter OR number
+            ),
+            '\s+', ' ', 'g'                       -- collapse spaces
+        )
+    ) AS hospital_name,
+
+    /* -------------------------------
+       Hospital city (action level)
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                LOWER(NULLIF(b.treatment_action_hospital_city_name, '')),
+                '[\.,\-]', ' ', 'g'
+            ),
+            '\s+', ' ', 'g'
+        )
+    ) AS hospital_city,
+
+    /* -------------------------------
+       City name (patient address city)
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                LOWER(NULLIF(b.city_name, '')),
+                '[\.,\-]', ' ', 'g'
+            ),
+            '\s+', ' ', 'g'
+        )
+    ) AS city_name,
+
+    /* -------------------------------
+       State name
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                LOWER(NULLIF(b.state_name, '')),
+                '[\.,\-]', ' ', 'g'
+            ),
+            '\s+', ' ', 'g'
+        )
+    ) AS state_name,
+
+    /* -------------------------------
+       Zone
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            LOWER(NULLIF(b.zones, '')),
+            '\s+', ' ', 'g'
+        )
+    ) AS zones,
+
+    /* -------------------------------
+       Pincode (safe cast)
+       ------------------------------- */
+    CASE
+        WHEN b.pincode IS NOT NULL
+        THEN b.pincode
+        ELSE NULL
+    END AS pincode,
+
+    /* -------------------------------
+       Address – minimal normalization
+       ------------------------------- */
+    TRIM(
+        REGEXP_REPLACE(
+            NULLIF(b.address, ''),
+            '\s+', ' ', 'g'
+        )
+    ) AS address,
+
+    b._source_system AS source_system
+
+FROM bronze.bronze_patient_treatment_actions b
+WHERE b.treatment_action_hospital_name IS NOT NULL
+  AND TRIM(b.treatment_action_hospital_name) <> '';
+
+SELECT COUNT(*) FROM silver.dim_hospital;
+SELECT * FROM silver.dim_hospital LIMIT 10;
