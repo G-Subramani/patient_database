@@ -271,3 +271,38 @@ WHERE b.treatment_action_hospital_name IS NOT NULL
 
 SELECT COUNT(*) FROM silver.dim_hospital;
 SELECT * FROM silver.dim_hospital LIMIT 10;
+
+--silver.dim_vendor_details
+INSERT INTO silver.dim_vendor (
+    vendor_name,
+    vendor_email_id,
+    source_system
+)
+SELECT DISTINCT
+    -- Clean vendor name
+    NULLIF(
+        TRIM(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                    b.vendor_partner_name,
+                    '[\.,\-]', ' ', 'g'
+                ),
+                '\s+', ' ', 'g'
+            )
+        ),
+        ''
+    ) AS vendor_name,
+
+    -- Clean vendor email (trim only)
+    NULLIF(TRIM(b.vendor_partner_email_id), '') AS vendor_email_id,
+
+    b._source_system AS source_system
+
+FROM bronze.bronze_patient_treatment_actions b
+WHERE b.vendor_partner_name IS NOT NULL
+  AND TRIM(b.vendor_partner_name) <> '';
+
+SELECT COUNT(*) FROM silver.dim_vendor;   
+
+SELECT * FROM silver.dim_vendor LIMIT 10;
+
