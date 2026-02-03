@@ -19,25 +19,28 @@ CREATE TABLE IF NOT EXISTS silver.dim_patient (
 	record_last_seen_at TIMESTAMP, --max(treatment_action_processed_at) 
 	_source_system TEXT, 
 	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ); 
-	
+
+
 --silver.dim_caregiver 
 CREATE TABLE IF NOT EXISTS silver.dim_caregiver ( 
 	caregiver_sk BIGSERIAL PRIMARY KEY, 
 	caregiver_name TEXT, 
 	caregiver_relationship TEXT, 
 	identification_type TEXT, 
-	identification_value TEXT, 
-	source_system TEXT, 
+	identification_value TEXT,  
 	record_first_seen_at TIMESTAMP, --min(treatment_enrollment_start_date) 
 	record_last_seen_at TIMESTAMP, --max(treatment_action_processed_at) 
-	); 
+	_source_system TEXT, 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+); 
 
 --silver.dim_doctor
 CREATE TABLE IF NOT EXISTS silver.dim_doctor( 
 	doctor_sk BIGSERIAL PRIMARY KEY, 
 	doctor_name TEXT, 
 	external_doctor_id TEXT, 
-	source_system TEXT ); 
+	source_system TEXT, 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); 
 
 --silver.dim_hospital
 CREATE TABLE IF NOT EXISTS silver.dim_hospital ( 
@@ -49,14 +52,16 @@ CREATE TABLE IF NOT EXISTS silver.dim_hospital (
 	zones TEXT, 
 	pincode INTEGER, 
 	address TEXT, 
-	source_system TEXT ); 
+	source_system TEXT 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); 
 
 --silver.dim_vendor
 CREATE TABLE IF NOT EXISTS silver.dim_vendor ( 
 	vendor_sk BIGSERIAL PRIMARY KEY, 
 	vendor_name TEXT, 
 	vendor_email_id TEXT, 
-	source_system TEXT ); 
+	source_system TEXT 
+	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); 
 
 --silver.fact_treatment
 
@@ -123,3 +128,6 @@ CREATE TABLE silver.audit_treatment_action_lineage (
 	source_file_name TEXT, 
 	source_system TEXT, 
 	loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );
+
+
+
