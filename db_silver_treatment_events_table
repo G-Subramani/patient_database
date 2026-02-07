@@ -1,10 +1,18 @@
 CREATE SCHEMA IF NOT EXISTS silver; 
 
+DROP TABLE silver.dim_patient CASCADE;
+
+SELECT * FROM silver.dim_patient LIMIT 1;
+
 --silver.dim_patient data 
 CREATE TABLE IF NOT EXISTS silver.dim_patient ( 
+	--Surrogate key
 	patient_sk BIGSERIAL PRIMARY KEY, 
+	-- Business keys
 	patient_id BIGINT NOT NULL, 
-	patient_id_with_prefix TEXT, 
+	patient_id_with_prefix TEXT,
+
+	-- Descriptive attributes (SCD-2 tracked)
 	patient_name TEXT, 
 	patient_email_id TEXT, 
 	patient_govt_id TEXT, --hospital_regid 
@@ -15,10 +23,22 @@ CREATE TABLE IF NOT EXISTS silver.dim_patient (
 	patient_updated_by TEXT, 
 	patient_updated_by_name TEXT, 
 	current_program TEXT,--sub_type 
+	-- Lifecycle tracking (not SCD keys)
 	record_first_seen_at TIMESTAMP, --min(treatment_enrollment_start_date) 
 	record_last_seen_at TIMESTAMP, --max(treatment_action_processed_at) 
+
+	--SCD-2 control columns
+	valid_from TIMESTAMP NOT NULL,
+    valid_to   TIMESTAMP,
+    is_current BOOLEAN NOT NULL DEFAULT TRUE,
+
+	--Lineage
 	_source_system TEXT, 
 	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ); 
+
+	CREATE UNIQUE INDEX IF NOT EXISTS ux_dim_patient_current
+	ON silver.dim_patient (patient_id, _source_system)
+	WHERE is_current = TRUE;
 
 
 --silver.dim_caregiver 
@@ -52,7 +72,7 @@ CREATE TABLE IF NOT EXISTS silver.dim_hospital (
 	zones TEXT, 
 	pincode INTEGER, 
 	address TEXT, 
-	source_system TEXT 
+	source_system TEXT, 
 	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); 
 
 --silver.dim_vendor
@@ -60,10 +80,11 @@ CREATE TABLE IF NOT EXISTS silver.dim_vendor (
 	vendor_sk BIGSERIAL PRIMARY KEY, 
 	vendor_name TEXT, 
 	vendor_email_id TEXT, 
-	source_system TEXT 
+	source_system TEXT, 
 	_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); 
 
 --silver.fact_treatment
+DROP TABLE silver.fact_treatment_action CASCADE; 
 
 CREATE TABLE IF NOT EXISTS silver.fact_treatment_action ( 
 	treatment_action_sk BIGSERIAL PRIMARY KEY, 
@@ -103,9 +124,9 @@ CREATE TABLE IF NOT EXISTS silver.fact_treatment_action (
 	treatment_action_processed_at TIMESTAMP, 
 	previous_action_processed_at TIMESTAMP, 
 	days_diff_prev_to_current NUMERIC, 
-	patient_created_by BIGINT, 
+	patient_created_by TEXT, 
 	patient_created_by_name TEXT, 
-	patient_updated_by BIGINT, 
+	patient_updated_by TEXT, 
 	patient_updated_by_name TEXT, 
 	user_name TEXT, 
 	notes TEXT, 
@@ -120,6 +141,7 @@ CREATE TABLE IF NOT EXISTS silver.fact_treatment_action (
 	CONSTRAINT fk_vendor FOREIGN KEY (vendor_sk) REFERENCES silver.dim_vendor(vendor_sk) 
 	); 
 
+SELECT * FROM silver.fact_treatment_action;
 CREATE TABLE silver.audit_treatment_action_lineage ( 
 	index_no BIGINT PRIMARY KEY, 
 	treatment_action_id BIGINT, 
