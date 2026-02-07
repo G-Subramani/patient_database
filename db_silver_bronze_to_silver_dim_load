@@ -1,88 +1,184 @@
 --silver dimension table load 
---patient table  
+TRUNCATE TABLE silver.fact_treatment_action;
+TRUNCATE TABLE silver.dim_patient CASCADE;
+SELECT * FROM silver.dim_patient LIMIT 10;
+
+WITH dedup_bronze AS (
+    -- 1️⃣ pick the latest version of patient per source
+    SELECT *
+    FROM (
+        SELECT
+            b.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY b.patient_id, b._source_system
+                ORDER BY
+                    b.treatment_action_processed_at DESC NULLS LAST,
+                    b.index_no DESC
+            ) AS rn
+        FROM bronze.bronze_patient_treatment_actions b
+        WHERE b.patient_id IS NOT NULL
+    ) x
+    WHERE rn = 1
+),
+
+normalized_bronze AS (
+    -- 2️⃣ normalize & clean patient attributes
+    SELECT
+        b.patient_id,
+        TRIM(NULLIF(b.patient_id_with_prefix, '')) AS patient_id_with_prefix,
+
+        TRIM(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(NULLIF(b.patient_name, ''), '[\.,\-]', ' ', 'g'),
+                '\s+', ' ', 'g'
+            )
+        ) AS patient_name,
+
+        LOWER(TRIM(NULLIF(b.patient_email_id, ''))) AS patient_email_id,
+        TRIM(NULLIF(b.hospitalregid, '')) AS patient_govt_id,
+
+        b.patient_dob AS patient_date_of_birth,
+        b.age,
+
+        b.patient_created_by,
+        TRIM(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(NULLIF(b.patient_created_by_name, ''), '[\.,\-]', ' ', 'g'),
+                '\s+', ' ', 'g'
+            )
+        ) AS patient_created_by_name,
+
+        b.patient_updated_by,
+        TRIM(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(NULLIF(b.patient_updated_by_name, ''), '[\.,\-]', ' ', 'g'),
+                '\s+', ' ', 'g'
+            )
+        ) AS patient_updated_by_name,
+
+        TRIM(NULLIF(b.sub_type, '')) AS current_program,
+
+        b.treatment_enrollment_start_date AS record_first_seen_at,
+        b.treatment_action_processed_at   AS record_last_seen_at,
+
+        b._source_system
+    FROM dedup_bronze b
+),
+
+changed_patients AS (
+    -- 3️⃣ find patients where something actually changed
+    SELECT
+        nb.*
+    FROM normalized_bronze nb
+    LEFT JOIN silver.dim_patient sp
+        ON sp.patient_id = nb.patient_id
+       AND sp._source_system = nb._source_system
+       AND sp.is_current = TRUE
+    WHERE
+       sp.patient_sk IS NULL
+       OR sp.patient_email_id IS DISTINCT FROM nb.patient_email_id
+       OR sp.current_program IS DISTINCT FROM nb.current_program
+)
+
+-- 4️⃣ expire old rows
+UPDATE silver.dim_patient sp
+SET
+    valid_to   = CURRENT_TIMESTAMP,
+    is_current = FALSE
+FROM changed_patients cp
+WHERE sp.patient_id = cp.patient_id
+  AND sp._source_system = cp._source_system
+  AND sp.is_current = TRUE;
+
+WITH dedup_bronze AS (
+    SELECT *
+    FROM (
+        SELECT
+            b.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY b.patient_id, b._source_system
+                ORDER BY b.treatment_action_processed_at DESC NULLS LAST,
+                         b.index_no DESC
+            ) AS rn
+        FROM bronze.bronze_patient_treatment_actions b
+        WHERE b.patient_id IS NOT NULL
+    ) x
+    WHERE rn = 1
+),
+normalized_bronze AS (
+    SELECT
+        b.patient_id,
+        TRIM(NULLIF(b.patient_id_with_prefix, '')) AS patient_id_with_prefix,
+        TRIM(REGEXP_REPLACE(REGEXP_REPLACE(b.patient_name, '[\.,\-]', ' ', 'g'), '\s+', ' ', 'g')) AS patient_name,
+        LOWER(TRIM(b.patient_email_id)) AS patient_email_id,
+        TRIM(b.hospitalregid) AS patient_govt_id,
+        b.patient_dob AS patient_date_of_birth,
+        b.age,
+        b.patient_created_by,
+        TRIM(b.patient_created_by_name) AS patient_created_by_name,
+        b.patient_updated_by,
+        TRIM(b.patient_updated_by_name) AS patient_updated_by_name,
+        TRIM(b.sub_type) AS current_program,
+        b.treatment_enrollment_start_date AS record_first_seen_at,
+        b.treatment_action_processed_at AS record_last_seen_at,
+        b._source_system
+    FROM dedup_bronze b
+),
+changed_patients AS (
+    SELECT nb.*
+    FROM normalized_bronze nb
+    LEFT JOIN silver.dim_patient sp
+        ON sp.patient_id = nb.patient_id
+       AND sp._source_system = nb._source_system
+       AND sp.is_current = TRUE
+    WHERE sp.patient_sk IS NULL
+       OR sp.patient_email_id IS DISTINCT FROM nb.patient_email_id
+       OR sp.current_program IS DISTINCT FROM nb.current_program
+)
+
 INSERT INTO silver.dim_patient (
     patient_id,
     patient_id_with_prefix,
-
     patient_name,
     patient_email_id,
     patient_govt_id,
     patient_date_of_birth,
     age,
-
     patient_created_by,
     patient_created_by_name,
     patient_updated_by,
     patient_updated_by_name,
     current_program,
-
     record_first_seen_at,
     record_last_seen_at,
-
+    valid_from,
+    valid_to,
+    is_current,
     _source_system
 )
 SELECT
-    b.patient_id,
-    TRIM(NULLIF(b.patient_id_with_prefix, '')),
+    patient_id,
+    patient_id_with_prefix,
+    patient_name,
+    patient_email_id,
+    patient_govt_id,
+    patient_date_of_birth,
+    age,
+    patient_created_by,
+    patient_created_by_name,
+    patient_updated_by,
+    patient_updated_by_name,
+    current_program,
+    record_first_seen_at,
+    record_last_seen_at,
+    CURRENT_TIMESTAMP,
+    NULL,
+    TRUE,
+    _source_system
+FROM changed_patients;
 
-    -- patient_name (heavy cleanup)
-    TRIM(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(NULLIF(b.patient_name, ''), '[\.,\-]', ' ', 'g'),
-            '\s+', ' ', 'g'
-        )
-    ) AS patient_name,
 
-    -- email normalization
-    LOWER(TRIM(NULLIF(b.patient_email_id, ''))) AS patient_email_id,
-
-    -- govt id (hospitalregid)
-    TRIM(NULLIF(b.hospitalregid, '')) AS patient_govt_id,
-
-    b.patient_dob AS patient_date_of_birth,
-    b.age,
-
-    b.patient_created_by,
-
-    -- created by name cleanup
-    TRIM(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(NULLIF(b.patient_created_by_name, ''), '[\.,\-]', ' ', 'g'),
-            '\s+', ' ', 'g'
-        )
-    ) AS patient_created_by_name,
-
-    b.patient_updated_by,
-
-    -- updated by name cleanup
-    TRIM(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(NULLIF(b.patient_updated_by_name, ''), '[\.,\-]', ' ', 'g'),
-            '\s+', ' ', 'g'
-        )
-    ) AS patient_updated_by_name,
-
-    TRIM(NULLIF(b.sub_type, '')) AS current_program,
-
-    MIN(b.treatment_enrollment_start_date) AS record_first_seen_at,
-    MAX(b.treatment_action_processed_at)   AS record_last_seen_at,
-
-    MAX(b._source_system) AS _source_system
-FROM bronze.bronze_patient_treatment_actions b
-WHERE b.patient_id IS NOT NULL
-GROUP BY
-    b.patient_id,
-    b.patient_id_with_prefix,
-    b.patient_name,
-    b.patient_email_id,
-    b.hospitalregid,
-    b.patient_dob,
-    b.age,
-    b.patient_created_by,
-    b.patient_created_by_name,
-    b.patient_updated_by,
-    b.patient_updated_by_name,
-    b.sub_type;
+SELECT * FROM silver.dim_patient LIMIT 10;
 
 SELECT * FROM silver.dim_patient LIMIT 10;
 SELECT COUNT(*) FROM  silver.dim_patient;
@@ -305,4 +401,50 @@ WHERE b.vendor_partner_name IS NOT NULL
 SELECT COUNT(*) FROM silver.dim_vendor;   
 
 SELECT * FROM silver.dim_vendor LIMIT 10;
+
+SELECT patient_id, COUNT(*) FROM silver.dim_patient
+GROUP BY patient_id
+HAVING COUNT(*)>1
+
+SELECT patient_id, patient_email_id, patient_govt_id,  COUNT(*) FROM silver.dim_patient
+
+GROUP BY patient_id, patient_email_id, patient_govt_id
+
+HAVING COUNT(*)>1;
+
+SELECT * FROM silver.dim_patient LIMIT 10;
+
+SELECT * FROM silver.dim_caregiver LIMIT 10;
+
+SELECT * FROM silver.dim_doctor LIMIT 10;
+SELECT caregiver_name, caregiver_relationship, identification_value, COUNT(*)
+FROM silver.dim_caregiver
+GROUP BY caregiver_name, caregiver_relationship, identification_value
+HAVING COUNT(*)>1;
+
+SELECT doctor_name, external_doctor_id, COUNT(*)  FROM silver.dim_doctor 
+GROUP BY doctor_name, external_doctor_id 
+HAVING COUNT(*)>1;
+
+SELECT doctor_name, COUNT(*) FROM silver.dim_doctor
+GROUP BY doctor_name
+HAVING COUNT(*)>1;
+
+SELECT doctor_name, external_doctor_id, COUNT(*) FROM silver.dim_doctor
+WHERE external_doctor_id IS NULL
+GROUP BY doctor_name, external_doctor_id
+HAVING COUNT(*)>1;
+
+SELECT * FROM silver.dim_hospital LIMIT 10;
+
+SELECT hospital_name, pincode, COUNT(*) FROM silver.dim_hospital
+GROUP BY hospital_name, pincode
+HAVING COUNT(*)>1;
+
+SELECT * FROM silver.dim_vendor LIMIT 10;
+
+SELECT vendor_name, vendor_email_id, count(*) FROM silver.dim_vendor
+GROUP BY vendor_name, vendor_email_id
+HAVING COUNT(*)>1;
+
 
